@@ -42,6 +42,8 @@ function generarSlots(fecha) {
 
 // --------- STORAGE ---------
 async function guardarCitaSupabase(cita) {
+    // Generar código de verificación único (6 dígitos)
+    const codigoVerificacion = Math.random().toString(36).substring(2, 8).toUpperCase();
 
     const { error } = await client
         .from('appointments')
@@ -50,7 +52,8 @@ async function guardarCitaSupabase(cita) {
                 client_name: cita.nombre,
                 client_phone: cita.telefono,
                 appointment_date: cita.fecha,
-                appointment_time: cita.horario
+                appointment_time: cita.horario,
+                client_verification_code: codigoVerificacion
             }
         ]);
 
@@ -60,6 +63,8 @@ async function guardarCitaSupabase(cita) {
         return false;
     }
 
+    // Guardar el código en la cita para mostrarlo después
+    cita.codigoVerificacion = codigoVerificacion;
     return true;
 }
 
@@ -79,7 +84,8 @@ async function cargarCitas() {
         nombre: c.client_name,
         telefono: c.client_phone,
         fecha: c.appointment_date,
-        horario: c.appointment_time
+        horario: c.appointment_time,
+        codigoVerificacion: c.client_verification_code
     }));
 
 }
@@ -429,13 +435,13 @@ function renderMisCitas() {
         <div class="fade-in" style="max-width:600px; margin:0 auto;">
             <div style="text-align:center; margin-bottom:32px;">
                 <h2 style="font-size:28px; font-weight:900; color:#1e293b; margin:0 0 8px 0;">🔍 Busca tu cita</h2>
-                <p style="color:#94a3b8; font-size:14px; margin:0;">Ingresa tu nombre o teléfono para encontrar tu reservación</p>
+                <p style="color:#94a3b8; font-size:14px; margin:0;">Ingresa tu código de verificación para encontrar tu reservación</p>
             </div>
 
             <div style="position:relative; margin-bottom:24px;">
-                <span style="position:absolute; left:16px; top:50%; transform:translateY(-50%); font-size:18px;">🔍</span>
-                <input id="inputBuscarCita" class="input-field" type="text" placeholder="Nombre o teléfono..." 
-                    style="padding-left:48px; font-size:16px; padding-top:16px; padding-bottom:16px;"
+                <span style="position:absolute; left:16px; top:50%; transform:translateY(-50%); font-size:18px;">🔐</span>
+                <input id="inputBuscarCita" class="input-field" type="text" placeholder="Código de verificación (6 caracteres)..." 
+                    style="padding-left:48px; font-size:16px; padding-top:16px; padding-bottom:16px; text-transform:uppercase;"
                     oninput="renderBusquedaCitas()" />
             </div>
 
@@ -445,28 +451,26 @@ function renderMisCitas() {
 }
 
 function renderBusquedaCitas() {
-    const q = document.getElementById("inputBuscarCita").value.trim();
+    const q = document.getElementById("inputBuscarCita").value.trim().toUpperCase();
     const contenedor = document.getElementById("resultadosCitas");
 
     if (!q) {
         contenedor.innerHTML = `
             <div style="text-align:center; padding:48px; background:white; border-radius:20px; border:2px dashed #e2e8f0;">
-                <div style="font-size:40px; margin-bottom:12px;">🔍</div>
-                <p style="color:#cbd5e1; font-weight:800; text-transform:uppercase; font-size:12px; letter-spacing:0.1em;">Escribe para buscar</p>
+                <div style="font-size:40px; margin-bottom:12px;">🔐</div>
+                <p style="color:#cbd5e1; font-weight:800; text-transform:uppercase; font-size:12px; letter-spacing:0.1em;">Ingresa tu código</p>
             </div>`;
         return;
     }
 
-    const resultados = citas.filter(c =>
-        normalizar(c.nombre).includes(normalizar(q)) ||
-        c.telefono.includes(q)
-    );
+    // Solo buscar por código de verificación
+    const resultados = citas.filter(c => c.codigoVerificacion && c.codigoVerificacion === q);
 
     if (resultados.length === 0) {
         contenedor.innerHTML = `
             <div style="text-align:center; padding:48px; background:white; border-radius:20px;">
                 <div style="font-size:40px; margin-bottom:12px;">😕</div>
-                <p style="color:#94a3b8; font-weight:700;">No se encontraron citas para "<strong>${q}</strong>"</p>
+                <p style="color:#94a3b8; font-weight:700;">No encontramos una cita con ese código</p>
             </div>`;
         return;
     }
@@ -476,7 +480,7 @@ function renderBusquedaCitas() {
         const pasada = fechaHora < new Date();
         return `
             <div class="cita-item">
-                <div style="display:flex; align-items:center; gap:14px;">
+                <div style="display:flex; align-items:center; gap:14px; flex:1;">
                     <div class="avatar">${c.nombre.charAt(0).toUpperCase()}</div>
                     <div>
                         <div style="font-weight:900; color:#1e293b; font-size:16px;">${c.nombre}</div>
@@ -484,9 +488,12 @@ function renderBusquedaCitas() {
                         <span class="${pasada ? 'badge-pasado' : 'badge-confirmado'}">${pasada ? 'Pasada' : 'Confirmada'}</span>
                     </div>
                 </div>
-                <div style="text-align:right;">
-                    <div style="font-size:12px; color:#94a3b8; font-weight:700; text-transform:uppercase;">${fechaHora.toLocaleDateString("es-MX", {month:"short", day:"numeric"})}</div>
-                    <div style="font-size:20px; font-weight:900; color:#1e293b;">${fechaHora.toLocaleTimeString("es-MX", {hour:"2-digit", minute:"2-digit", hour12:true})}</div>
+                <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
+                    <div style="text-align:right;">
+                        <div style="font-size:12px; color:#94a3b8; font-weight:700; text-transform:uppercase;">${fechaHora.toLocaleDateString("es-MX", {month:"short", day:"numeric"})}</div>
+                        <div style="font-size:20px; font-weight:900; color:#1e293b;">${fechaHora.toLocaleTimeString("es-MX", {hour:"2-digit", minute:"2-digit", hour12:true})}</div>
+                    </div>
+                    ${!pasada ? `<button onclick="cancelarCitaUsuario('${c.id}')" class="btn-danger" style="padding:8px 16px; font-size:12px;">🗑️ Cancelar cita</button>` : ''}
                 </div>
             </div>`;
     }).join("");
@@ -594,11 +601,16 @@ function renderExito(cita) {
         <div class="exito-box">
             <div style="width:80px; height:80px; background:#dcfce7; border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 24px; font-size:40px;">✅</div>
             <h2 style="font-size:28px; font-weight:900; color:#1e293b; margin:0 0 12px 0;">¡Cita confirmada!</h2>
-            <p style="color:#64748b; margin:0 0 32px 0; line-height:1.6;">
+            <p style="color:#64748b; margin:0 0 24px 0; line-height:1.6;">
                 Hola <strong>${cita.nombre}</strong>, tu cita quedó reservada para el 
                 <strong>${fechaHora.toLocaleDateString("es-MX", {weekday:"long", month:"long", day:"numeric"})}</strong> 
                 a las <strong>${fechaHora.toLocaleTimeString("es-MX", {hour:"2-digit", minute:"2-digit", hour12:true})}</strong>.
             </p>
+            <div style="background:#eff6ff; border:2px solid #2563eb; border-radius:14px; padding:16px; margin-bottom:24px;">
+                <div style="font-size:11px; font-weight:800; color:#2563eb; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:8px;">Tu código de verificación</div>
+                <div style="font-size:28px; font-weight:900; color:#1e293b; letter-spacing:3px; font-family:monospace;">${cita.codigoVerificacion}</div>
+                <div style="font-size:12px; color:#64748b; margin-top:8px;">Guarda este código para buscar tu cita</div>
+            </div>
             <div style="display:flex; flex-direction:column; gap:12px;">
                 <a href="${url}" target="_blank" class="btn-whatsapp">
                     💬 Notificar por WhatsApp
@@ -663,6 +675,52 @@ function confirmarCita() {
     });
 }
 
+async function cancelarCitaUsuario(id) {
+    if (!confirm("¿Estás seguro de que quieres cancelar tu cita? No podrás recuperarla.")) return;
+    
+    const { error } = await client
+        .from('appointments')
+        .delete()
+        .eq('id', id);
+    
+    if (error) { 
+        console.error("Error al cancelar:", error);
+        alert("Error al cancelar la cita"); 
+        return; 
+    }
+    
+    // Recargar citas de la base de datos después de eliminar
+    await cargarCitas();
+    
+    // Mostrar mensaje de éxito
+    document.getElementById("inputBuscarCita").value = "";
+    renderBusquedaCitas();
+    
+    // Mostrar notificación
+    mostrarNotificacion("✅ Cita cancelada correctamente", "success");
+}
+
+function mostrarNotificacion(mensaje, tipo = "success") {
+    const notif = document.createElement("div");
+    notif.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${tipo === 'success' ? '#dcfce7' : '#fee2e2'};
+        color: ${tipo === 'success' ? '#16a34a' : '#dc2626'};
+        padding: 16px 24px;
+        border-radius: 12px;
+        font-weight: 700;
+        z-index: 1000;
+        animation: slideIn 0.3s ease;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    `;
+    notif.textContent = mensaje;
+    document.body.appendChild(notif);
+    
+    setTimeout(() => notif.remove(), 4000);
+}
+
 async function cancelarCita(id) {
     if (!confirm("¿Eliminar esta cita permanentemente?")) return;
     
@@ -672,12 +730,15 @@ async function cancelarCita(id) {
         .eq('id', id);
     
     if (error) { 
-        alert("Error al eliminar"); 
+        console.error("Error al eliminar:", error);
+        alert("Error al eliminar: " + error.message); 
         return; 
     }
     
-    citas = citas.filter(c => c.id !== id);
+    // Recargar citas de la base de datos después de eliminar
+    await cargarCitas();
     actualizarPagina();
+    mostrarNotificacion("✅ Cita eliminada", "success");
 }
 
 function loginAdmin() {
