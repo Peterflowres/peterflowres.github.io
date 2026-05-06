@@ -654,25 +654,29 @@ function confirmarCita() {
         horario: slotSeleccionado
     };
 
-guardarCitaSupabase(nuevaCita).then(success => {
-
-    if(success){
-
-        citas.push(nuevaCita);
-
-        slotSeleccionado = null;
-
-        renderExito(nuevaCita);
-
-    }
-
-});
+    guardarCitaSupabase(nuevaCita).then(success => {
+        if(success){
+            citas.push(nuevaCita);
+            slotSeleccionado = null;
+            renderExito(nuevaCita);
+        }
+    });
 }
 
-function cancelarCita(id) {
+async function cancelarCita(id) {
     if (!confirm("¿Eliminar esta cita permanentemente?")) return;
+    
+    const { error } = await client
+        .from('appointments')
+        .delete()
+        .eq('id', id);
+    
+    if (error) { 
+        alert("Error al eliminar"); 
+        return; 
+    }
+    
     citas = citas.filter(c => c.id !== id);
-    guardarCitas();
     actualizarPagina();
 }
 
@@ -713,18 +717,15 @@ function actualizarPagina() {
             <div id="contenido">${contenidoVista}</div>
         </div>
         <footer style="text-align:center; padding:24px; background:#1e293b; color:#64748b; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; margin-top:48px;">
-            <span style="color:#22c55e;">● Sistema activo</span> &nbsp;|&nbsp; localStorage activo &nbsp;|&nbsp; Solo lado cliente
+            <span style="color:#22c55e;">● Sistema activo</span> &nbsp;|&nbsp; Supabase activo &nbsp;|&nbsp; Base de datos en la nube
         </footer>
     `;
 }
 
 // --------- INIT ---------
 async function init(){
-
     await cargarCitas();
-
     actualizarPagina();
-
 }
 
 init();
