@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Citas</title>
+    <title>Sistema de Citas - Confirmación y Horarios</title>
     <style>
         body {
             margin: 0;
@@ -34,6 +34,93 @@
             font-size: 14px;
             font-weight: 600;
         }
+        /* Estilos para el modal de confirmación */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            animation: fadeIn 0.2s ease;
+        }
+        .modal-contenido {
+            background: white;
+            border-radius: 28px;
+            max-width: 450px;
+            width: 90%;
+            padding: 28px 24px 32px;
+            box-shadow: 0 20px 35px -12px rgba(0,0,0,0.3);
+            text-align: center;
+            animation: scaleIn 0.2s ease;
+        }
+        @keyframes scaleIn {
+            from { transform: scale(0.95); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        .resumen-item {
+            background: #f8fafc;
+            border-radius: 16px;
+            padding: 12px 16px;
+            margin: 10px 0;
+            text-align: left;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border: 1px solid #e2e8f0;
+        }
+        .resumen-icono {
+            font-size: 24px;
+            min-width: 40px;
+            text-align: center;
+        }
+        .resumen-texto {
+            flex: 1;
+        }
+        .resumen-label {
+            font-size: 10px;
+            font-weight: 800;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .resumen-valor {
+            font-weight: 900;
+            color: #0f172a;
+            font-size: 16px;
+            margin-top: 2px;
+        }
+        .btn-confirmar {
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 14px;
+            padding: 14px;
+            font-weight: 800;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 16px;
+            transition: 0.2s;
+        }
+        .btn-confirmar:hover { background: #1d4ed8; }
+        .btn-cancelar {
+            background: #f1f5f9;
+            color: #475569;
+            border: none;
+            border-radius: 14px;
+            padding: 12px;
+            font-weight: 600;
+            margin-top: 10px;
+            cursor: pointer;
+            width: 100%;
+        }
+        .btn-cancelar:hover { background: #e2e8f0; }
     </style>
 </head>
 <body>
@@ -45,7 +132,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
         // ============================================
-        // SISTEMA DE CITAS - VERSIÓN FINAL (CORREGIDO)
+        // SISTEMA DE CITAS - CON CONFIRMACIÓN Y VALIDACIONES
         // ============================================
 
         const supabaseUrl = 'https://bijqxtrtacnaurfouvot.supabase.co';
@@ -62,7 +149,7 @@
         const PASSWORD_ADMIN = "1234";
         const numeroWhatsApp = "524425761233";
 
-        // --------- SLOTS AUTOMÁTICOS ---------
+        // --------- SLOTS AUTOMÁTICOS (9AM - 5PM cada 30 min) ---------
         function generarSlots(fecha) {
             const slots = [];
             const ahora = new Date();
@@ -148,7 +235,7 @@
             return texto.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         }
 
-        // --------- ESTILOS ---------
+        // --------- ESTILOS GLOBALES ---------
         const estilos = `
             * { box-sizing: border-box; }
 
@@ -386,82 +473,81 @@
             `;
         }
 
-        // --------- RENDER VISTA AGENDAR ---------
         function renderAgendar() {
-            const diasHTML = generarDias();
-            const slotsHTML = renderSlots();
+    const fechaActualStr = fechaSeleccionada.toISOString().split('T')[0];
+    const slotsHTML = renderSlots();
 
-            return `
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:start;" class="fade-in">
-                    <div class="tarjeta">
-                        <h2 style="margin:0 0 20px 0; font-size:22px; font-weight:900; color:#1e293b;">Reserva tu cita</h2>
+    return `
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:start;" class="fade-in">
+            <div class="tarjeta">
+                <h2 style="margin:0 0 20px 0; font-size:22px; font-weight:900; color:#1e293b;">Reserva tu cita</h2>
 
-                        <div style="margin-bottom:16px;">
-                            <label for="inputNombre">Nombre completo</label>
-                            <input id="inputNombre" class="input-field" type="text" placeholder="Tu nombre" />
+                <div style="margin-bottom:16px;">
+                    <label for="inputNombre">Nombre completo</label>
+                    <input id="inputNombre" class="input-field" type="text" placeholder="Tu nombre" />
+                </div>
+
+                <div style="margin-bottom:16px;">
+                    <label for="inputTelefono">Teléfono</label>
+                    <input id="inputTelefono" class="input-field" type="tel" placeholder="10 dígitos" />
+                </div>
+
+                <div style="margin-bottom:20px;">
+                    <label for="inputEmail">Email</label>
+                    <input id="inputEmail" class="input-field" type="email" placeholder="tu@email.com" />
+                </div>
+
+                <div id="errorMsg" style="display:none;" class="error-msg"></div>
+
+                <button class="btn-primary" onclick="confirmarCita()">
+                    Verificar y confirmar →
+                </button>
+            </div>
+
+            <div>
+                <div class="tarjeta">
+                    <h3 style="margin:0 0 14px 0; font-size:16px; font-weight:900; color:#1e293b;">📆 Selecciona el día</h3>
+                    <input type="date" id="selectorFecha" class="input-field" style="width:100%;" value="${fechaActualStr}" min="${new Date().toISOString().split('T')[0]}">
+                </div>
+
+                <div class="tarjeta">
+                    <h3 style="margin:0 0 4px 0; font-size:16px; font-weight:900; color:#1e293b;">🕐 Horarios disponibles</h3>
+                    <p style="font-size:12px; color:#94a3b8; margin:0 0 4px 0;">${fechaSeleccionada.toLocaleDateString("es-MX", { weekday:"long", month:"long", day:"numeric" })}</p>
+                    <div class="slots-grid">${slotsHTML}</div>
+                    <div style="display:flex; gap:16px; margin-top:16px; padding-top:16px; border-top:1px solid #f1f5f9;">
+                        <div style="display:flex; align-items:center; gap:6px; font-size:11px; font-weight:700; color:#94a3b8;">
+                            <div style="width:12px;height:12px;border-radius:4px;background:white;border:2px solid #e2e8f0;"></div> Disponible
                         </div>
-
-                        <div style="margin-bottom:16px;">
-                            <label for="inputTelefono">Teléfono</label>
-                            <input id="inputTelefono" class="input-field" type="tel" placeholder="10 dígitos" />
+                        <div style="display:flex; align-items:center; gap:6px; font-size:11px; font-weight:700; color:#94a3b8;">
+                            <div style="width:12px;height:12px;border-radius:4px;background:#2563eb;"></div> Seleccionado
                         </div>
-
-                        <div style="margin-bottom:20px;">
-                            <label for="inputEmail">Email</label>
-                            <input id="inputEmail" class="input-field" type="email" placeholder="tu@email.com" />
-                        </div>
-
-                        <div id="errorMsg" style="display:none;" class="error-msg"></div>
-
-                        <button class="btn-primary" onclick="confirmarCita()">
-                            Verificar y confirmar →
-                        </button>
-                    </div>
-
-                    <div>
-                        <div class="tarjeta">
-                            <h3 style="margin:0 0 14px 0; font-size:16px; font-weight:900; color:#1e293b;">📆 Selecciona el día</h3>
-                            <div class="dias-scroll">${diasHTML}</div>
-                        </div>
-
-                        <div class="tarjeta">
-                            <h3 style="margin:0 0 4px 0; font-size:16px; font-weight:900; color:#1e293b;">🕐 Horarios disponibles</h3>
-                            <p style="font-size:12px; color:#94a3b8; margin:0 0 4px 0;">${fechaSeleccionada.toLocaleDateString("es-MX", { weekday:"long", month:"long", day:"numeric" })}</p>
-                            <div class="slots-grid">${slotsHTML}</div>
-                            <div style="display:flex; gap:16px; margin-top:16px; padding-top:16px; border-top:1px solid #f1f5f9;">
-                                <div style="display:flex; align-items:center; gap:6px; font-size:11px; font-weight:700; color:#94a3b8;">
-                                    <div style="width:12px;height:12px;border-radius:4px;background:white;border:2px solid #e2e8f0;"></div> Disponible
-                                </div>
-                                <div style="display:flex; align-items:center; gap:6px; font-size:11px; font-weight:700; color:#94a3b8;">
-                                    <div style="width:12px;height:12px;border-radius:4px;background:#2563eb;"></div> Seleccionado
-                                </div>
-                                <div style="display:flex; align-items:center; gap:6px; font-size:11px; font-weight:700; color:#94a3b8;">
-                                    <div style="width:12px;height:12px;border-radius:4px;background:#fee2e2;"></div> Ocupado
-                                </div>
-                            </div>
+                        <div style="display:flex; align-items:center; gap:6px; font-size:11px; font-weight:700; color:#94a3b8;">
+                            <div style="width:12px;height:12px;border-radius:4px;background:#fee2e2;"></div> Ocupado
                         </div>
                     </div>
                 </div>
-            `;
-        }
+            </div>
+        </div>
+    `;
+}
 
         function generarDias() {
-            let html = "";
-            for (let i = 0; i < 7; i++) {
-                const dia = new Date();
-                dia.setDate(dia.getDate() + i);
-                const esActivo = dia.toDateString() === fechaSeleccionada.toDateString();
-                const nombre = dia.toLocaleDateString("es-MX", { weekday: "short" });
-                const num = dia.getDate();
-                const fechaISO = dia.toISOString();
-                html += `
-                    <button class="dia-btn ${esActivo ? 'activo' : ''}" onclick="seleccionarDia('${fechaISO}')">
-                        <span class="dia-nombre">${nombre}</span>
-                        <span class="dia-num">${num}</span>
-                    </button>`;
-            }
-            return html;
-        }
+    let html = "";
+    for (let i = 0; i < 30; i++) {   // 30 días (aproximadamente un mes)
+        const dia = new Date();
+        dia.setDate(dia.getDate() + i);
+        const esActivo = dia.toDateString() === fechaSeleccionada.toDateString();
+        const nombre = dia.toLocaleDateString("es-MX", { weekday: "short" });
+        const num = dia.getDate();
+        const fechaISO = dia.toISOString();
+        html += `
+            <button class="dia-btn ${esActivo ? 'activo' : ''}" onclick="seleccionarDia('${fechaISO}')">
+                <span class="dia-nombre">${nombre}</span>
+                <span class="dia-num">${num}</span>
+            </button>`;
+    }
+    return html;
+}
 
         function renderSlots() {
             const slots = generarSlots(fechaSeleccionada);
@@ -639,6 +725,101 @@
                 </div>`;
         }
 
+        // --------- MODAL DE CONFIRMACIÓN (RESUMEN) ---------
+        function mostrarConfirmacionResumen(cita, onConfirm) {
+            // Crear overlay
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-overlay';
+            
+            // Dar formato a fecha y hora
+            const fechaHora = new Date(`${cita.fecha}T${cita.horario}`);
+            const fechaFormateada = fechaHora.toLocaleDateString("es-MX", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+            const horaFormateada = fechaHora.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", hour12: true });
+            
+            overlay.innerHTML = `
+                <div class="modal-contenido">
+                    <div style="font-size: 48px; margin-bottom: 8px;">📋</div>
+                    <h3 style="margin: 0 0 8px 0; font-size: 24px; font-weight: 900;">Confirma tus datos</h3>
+                    <p style="color: #64748b; margin-bottom: 24px;">Revisa que todo esté correcto</p>
+                    
+                    <div class="resumen-item">
+                        <div class="resumen-icono">👤</div>
+                        <div class="resumen-texto">
+                            <div class="resumen-label">Nombre completo</div>
+                            <div class="resumen-valor">${escapeHtml(cita.nombre)}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="resumen-item">
+                        <div class="resumen-icono">📞</div>
+                        <div class="resumen-texto">
+                            <div class="resumen-label">Teléfono</div>
+                            <div class="resumen-valor">${escapeHtml(cita.telefono)}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="resumen-item">
+                        <div class="resumen-icono">✉️</div>
+                        <div class="resumen-texto">
+                            <div class="resumen-label">Email</div>
+                            <div class="resumen-valor">${escapeHtml(cita.email)}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="resumen-item">
+                        <div class="resumen-icono">📅</div>
+                        <div class="resumen-texto">
+                            <div class="resumen-label">Fecha</div>
+                            <div class="resumen-valor">${fechaFormateada}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="resumen-item">
+                        <div class="resumen-icono">⏰</div>
+                        <div class="resumen-texto">
+                            <div class="resumen-label">Hora</div>
+                            <div class="resumen-valor">${horaFormateada}</div>
+                        </div>
+                    </div>
+                    
+                    <button class="btn-confirmar" id="btnConfirmarModal">✅ Confirmar cita</button>
+                    <button class="btn-cancelar" id="btnCancelarModal">❌ Cancelar</button>
+                </div>
+            `;
+            
+            document.body.appendChild(overlay);
+            
+            const confirmBtn = overlay.querySelector('#btnConfirmarModal');
+            const cancelBtn = overlay.querySelector('#btnCancelarModal');
+            
+            const cerrar = () => overlay.remove();
+            confirmBtn.onclick = () => {
+                cerrar();
+                onConfirm(true);
+            };
+            cancelBtn.onclick = () => {
+                cerrar();
+                onConfirm(false);
+            };
+            // Cerrar si se hace clic fuera del modal (opcional)
+            overlay.onclick = (e) => {
+                if (e.target === overlay) cerrar();
+            };
+        }
+        
+        // Helper para escapar HTML (seguridad)
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            }).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, function(c) {
+                return c;
+            });
+        }
+
         // --------- RENDER EXITO ---------
         function renderExito(cita) {
             const fechaHora = new Date(`${cita.fecha}T${cita.horario}`);
@@ -700,14 +881,32 @@
                 errorMsg.classList.remove("shake");
                 void errorMsg.offsetWidth;
                 errorMsg.classList.add("shake");
+                setTimeout(() => {
+                    if (errorMsg) errorMsg.style.display = "none";
+                }, 4000);
             };
 
+            // Validaciones básicas
             if (!nombre) return mostrarError("Por favor escribe tu nombre completo");
             if (!telefonoValido(telefono)) return mostrarError("Teléfono inválido, debe tener 10 dígitos");
             if (!email || !email.includes("@")) return mostrarError("Email inválido");
             if (!slotSeleccionado) return mostrarError("Por favor selecciona un horario");
 
+            // Validar que la fecha/hora no sea pasada (reforzar)
+            const fechaHoraSeleccionada = new Date(`${fechaSeleccionada.toISOString().split("T")[0]}T${slotSeleccionado}`);
+            if (fechaHoraSeleccionada < new Date()) {
+                return mostrarError("❌ No puedes agendar una cita en un horario pasado. Elige otro día u hora.");
+            }
+
+            // Verificar si el slot sigue disponible (por si otro usuario agendó mientras)
             const fechaStr = fechaSeleccionada.toISOString().split("T")[0];
+            const sigueDisponible = !citas.some(c => c.fecha === fechaStr && c.horario === slotSeleccionado);
+            if (!sigueDisponible) {
+                await cargarCitas(); // Recargar por si acaso
+                return mostrarError("⚠️ Este horario ya no está disponible. Selecciona otro.");
+            }
+
+            // Construir objeto cita
             const nuevaCita = {
                 id: crypto.randomUUID(),
                 nombre,
@@ -717,19 +916,32 @@
                 horario: slotSeleccionado
             };
 
-            const btnConfirmar = document.querySelector('.btn-primary');
-            btnConfirmar.disabled = true;
-            btnConfirmar.textContent = '⏳ Guardando...';
+            // Mostrar modal de confirmación con resumen
+            mostrarConfirmacionResumen(nuevaCita, async (confirmado) => {
+                if (!confirmado) return;
 
-            const success = await guardarCitaSupabase(nuevaCita);
-            btnConfirmar.disabled = false;
-            btnConfirmar.textContent = 'Verificar y confirmar →';
+                // Bloquear botón mientras se guarda
+                const btnConfirmar = document.querySelector('.btn-primary');
+                if (btnConfirmar) {
+                    btnConfirmar.disabled = true;
+                    btnConfirmar.textContent = '⏳ Guardando...';
+                }
 
-            if (success) {
-                citas.push(nuevaCita);
-                slotSeleccionado = null;
-                renderExito(nuevaCita);
-            }
+                const success = await guardarCitaSupabase(nuevaCita);
+                
+                if (btnConfirmar) {
+                    btnConfirmar.disabled = false;
+                    btnConfirmar.textContent = 'Verificar y confirmar →';
+                }
+
+                if (success) {
+                    await cargarCitas(); // Actualizar lista global
+                    slotSeleccionado = null;
+                    renderExito(nuevaCita);
+                } else {
+                    mostrarError("Error al guardar la cita. Intenta de nuevo.");
+                }
+            });
         }
 
         async function cancelarCitaUsuario(id) {
@@ -810,6 +1022,9 @@
                 errorLogin.classList.remove("shake");
                 void errorLogin.offsetWidth;
                 errorLogin.classList.add("shake");
+                setTimeout(() => {
+                    if (errorLogin) errorLogin.style.display = "none";
+                }, 3000);
             }
         }
 
@@ -819,27 +1034,40 @@
         }
 
         // --------- PAGINA PRINCIPAL ---------
-        function actualizarPagina() {
-            document.body.style.margin = "0";
-            document.body.style.fontFamily = "'Inter', Arial, sans-serif";
-            document.body.style.background = "#f1f5f9";
-            document.body.style.minHeight = "100vh";
+      function actualizarPagina() {
+    document.body.style.margin = "0";
+    document.body.style.fontFamily = "'Inter', Arial, sans-serif";
+    document.body.style.background = "#f1f5f9";
+    document.body.style.minHeight = "100vh";
 
-            let contenidoVista = "";
-            if (vistaActual === "agendar") contenidoVista = renderAgendar();
-            else if (vistaActual === "mis-citas") contenidoVista = renderMisCitas();
-            else if (vistaActual === "admin") contenidoVista = renderAdmin();
+    let contenidoVista = "";
+    if (vistaActual === "agendar") contenidoVista = renderAgendar();
+    else if (vistaActual === "mis-citas") contenidoVista = renderMisCitas();
+    else if (vistaActual === "admin") contenidoVista = renderAdmin();
 
-            document.body.innerHTML = `
-                ${renderNav()}
-                <div style="max-width:900px; margin:0 auto; padding:32px 20px;">
-                    <div id="contenido">${contenidoVista}</div>
-                </div>
-                <footer style="text-align:center; padding:24px; background:#1e293b; color:#64748b; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; margin-top:48px;">
-                    <span style="color:#22c55e;">● Sistema activo</span> &nbsp;|&nbsp; Supabase activo &nbsp;|&nbsp; Base de datos en la nube
-                </footer>
-            `;
-        }
+    document.body.innerHTML = `
+        ${renderNav()}
+        <div style="max-width:900px; margin:0 auto; padding:32px 20px;">
+            <div id="contenido">${contenidoVista}</div>
+        </div>
+        <footer style="text-align:center; padding:24px; background:#1e293b; color:#64748b; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; margin-top:48px;">
+            <span style="color:#22c55e;">● Sistema activo</span> &nbsp;|&nbsp; Supabase activo &nbsp;|&nbsp; Base de datos en la nube
+        </footer>
+    `;
+
+    // ----- NUEVO: event listener para el selector de fecha -----
+    const fechaInput = document.getElementById('selectorFecha');
+    if (fechaInput) {
+        const nuevoFechaInput = fechaInput.cloneNode(true);
+        fechaInput.parentNode.replaceChild(nuevoFechaInput, fechaInput);
+        
+        nuevoFechaInput.addEventListener('change', (e) => {
+            fechaSeleccionada = new Date(e.target.value);
+            slotSeleccionado = null;
+            actualizarPagina();
+        });
+    }
+}
 
         // --------- INIT ---------
         async function init() {
