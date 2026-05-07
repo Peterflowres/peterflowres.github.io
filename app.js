@@ -1,24 +1,24 @@
-const supabaseUrl = 'https://bijqxtrtacnaurfouvot.supabase.co';
+// ============================================
+// SISTEMA DE CITAS - VERSIÓN CORREGIDA
+// ============================================
 
-const supabaseKey = 'sb_publishable_rrjdevcx5GzgkXoJD2ZHAg_InNPJsXu';
+const supabaseUrl = 'https://bijqxtrtacnaurfouvot.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJpanF4dHJ0YWNuYXVyZm91dm90Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwOTM5OTksImV4cCI6MjA5MzY2OTk5OX0.tmUH2vystWgZc2eIm29-cHJTcbgGRGsZqBtTuDrfMtw';
 
 // 📧 CONFIGURACIÓN DE RESEND PARA EMAILS
-const RESEND_API_KEY = 're_FEFL5dso_3KS2sHBzZgGQeBr7NZDphULo'; // Tu API key de Resend
-const EMAIL_FROM = 'onboarding@resend.dev'; // Email desde el cual se envían
+const RESEND_API_KEY = 're_86oN5ZVk_CUA5DPruwTg3MXMbb1ZiZhRm';
+const EMAIL_FROM = 'onboarding@resend.dev';
 
-const client = window.supabase.createClient(
-    supabaseUrl,
-    supabaseKey
-);
+let client;
 let citas = [];
 let busqueda = "";
 let esAdmin = false;
-let vistaActual = "agendar"; // "agendar" | "mis-citas"
+let vistaActual = "agendar"; // "agendar" | "mis-citas" | "admin"
 let fechaSeleccionada = new Date();
 let slotSeleccionado = null;
 
-const PASSWORD_ADMIN = "1234"; // 🔐 cambia esto
-const numeroWhatsApp = "524425761233"; // 🔐 cambia esto
+const PASSWORD_ADMIN = "1234"; // 🔐 CAMBIAR ESTO EN PRODUCCIÓN
+const numeroWhatsApp = "524425761233"; // 🔐 CAMBIAR ESTO
 
 // --------- SLOTS AUTOMÁTICOS (9AM - 5PM cada 30 min) ---------
 function generarSlots(fecha) {
@@ -62,9 +62,9 @@ async function guardarCitaSupabase(cita) {
             }
         ]);
 
-    if(error){
-        console.log(error);
-        alert("Error guardando cita");
+    if (error) {
+        console.error("Error guardando cita:", error);
+        alert("Error guardando cita: " + error.message);
         return false;
     }
 
@@ -74,13 +74,12 @@ async function guardarCitaSupabase(cita) {
 }
 
 async function cargarCitas() {
-
     const { data, error } = await client
         .from('appointments')
         .select('*');
 
-    if(error){
-        console.log(error);
+    if (error) {
+        console.error("Error cargando citas:", error);
         return;
     }
 
@@ -93,7 +92,6 @@ async function cargarCitas() {
         horario: c.appointment_time,
         codigoVerificacion: c.client_verification_code
     }));
-
 }
 
 // --------- HELPERS ---------
@@ -734,7 +732,7 @@ function seleccionarSlot(horaKey) {
     actualizarPagina();
 }
 
-function confirmarCita() {
+async function confirmarCita() {
     const nombre = document.getElementById("inputNombre").value.trim();
     const telefono = document.getElementById("inputTelefono").value.trim();
     const email = document.getElementById("inputEmail").value.trim();
@@ -763,18 +761,17 @@ function confirmarCita() {
         horario: slotSeleccionado
     };
 
-    guardarCitaSupabase(nuevaCita).then(success => {
-        if(success){
-            citas.push(nuevaCita);
-            slotSeleccionado = null;
-            
-            // 📧 Enviar email de confirmación
-            const htmlEmail = crearEmailConfirmacion(nuevaCita);
-            enviarEmail(email, "✅ Cita confirmada", htmlEmail);
-            
-            renderExito(nuevaCita);
-        }
-    });
+    const success = await guardarCitaSupabase(nuevaCita);
+    if (success) {
+        citas.push(nuevaCita);
+        slotSeleccionado = null;
+        
+        // 📧 Enviar email de confirmación
+        const htmlEmail = crearEmailConfirmacion(nuevaCita);
+        enviarEmail(email, "✅ Cita confirmada", htmlEmail);
+        
+        renderExito(nuevaCita);
+    }
 }
 
 async function cancelarCitaUsuario(id) {
@@ -787,14 +784,14 @@ async function cancelarCitaUsuario(id) {
     
     if (error) { 
         console.error("Error al cancelar:", error);
-        alert("Error al cancelar la cita"); 
+        alert("Error al cancelar la cita: " + error.message); 
         return; 
     }
     
     // Recargar citas de la base de datos después de eliminar
     await cargarCitas();
     
-    // Mostrar mensaje de éxito
+    // Limpiar búsqueda y actualizar
     document.getElementById("inputBuscarCita").value = "";
     renderBusquedaCitas();
     
@@ -824,16 +821,12 @@ function mostrarNotificacion(mensaje, tipo = "success") {
 }
 
 async function cancelarCita(id) {
-    console.log("Intentando eliminar cita con ID:", id);
-    
     if (!confirm("¿Eliminar esta cita permanentemente?")) return;
     
     const { error } = await client
         .from('appointments')
         .delete()
         .eq('id', id);
-    
-    console.log("Respuesta de Supabase:", { error });
     
     if (error) { 
         console.error("Error al eliminar:", error);
@@ -890,7 +883,7 @@ function actualizarPagina() {
 }
 
 // --------- INIT ---------
-async function init(){
+async function init() {
     // Esperar a que Supabase esté disponible
     let intentos = 0;
     while (!window.supabase && intentos < 30) {
@@ -903,8 +896,13 @@ async function init(){
         return;
     }
     
+    // Crear cliente Supabase
+    client = window.supabase.createClient(supabaseUrl, supabaseKey);
+    
+    // Cargar citas y renderizar
     await cargarCitas();
     actualizarPagina();
 }
 
+// Iniciar la aplicación
 init();
